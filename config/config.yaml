@@ -4,7 +4,7 @@ project:
 paths:
   vv_dir: data/raw/vv
   vh_dir: data/raw/vh
-  blocks: data/vectors/blocks.gpkg
+  blocks: data/vectors/blocks.geojson
   observations: data/metadata/observations.csv
   outputs: outputs
   models: models
