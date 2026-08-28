@@ -48,7 +48,7 @@ see **Run** below.
 Recommended: Miniforge/Mambaforge and Python 3.11.
 
 ```bash
-micromamba create -f environment.yml
+micromamba create -f dev/environment.yml
 micromamba activate sugarcane-rvi
 python -m pip install -e .
 pytest -q
@@ -78,23 +78,50 @@ for the expected columns) and rerun `python main.py`.
 
 Use `notebooks/Sugarcane_RVI_Early_Warning.ipynb` for a cell-by-cell workflow, including a synthetic smoke test, heat map, GeoTIFF creation and notebook download link.
 
-## Multi-task dashboard: Sentinel-1 Growth Curves
+## Multi-task dashboard
 
-`dashboard.py` is a Streamlit multipage app. Alongside the block-level RVI
-early-warning view (the home page), `pages/1_S1_Growth_Curves.py` is a second,
-independent tool: upload any field-boundary GeoJSON and it fetches live
-Sentinel-1 VH/VV growth curves straight from the Sentinel Hub Process API —
-no SNAP preprocessing or local `data/raw/vv|vh` rasters required. Its engine
-lives in `src/s1_growth_curves.py`. Streamlit auto-detects the `pages/`
-folder and adds sidebar navigation between the two tools; no extra wiring
-needed.
+`dashboard.py` is a Streamlit multipage app with three tools. Streamlit
+auto-detects the `pages/` folder and adds sidebar navigation between them;
+no extra wiring needed.
 
-It needs a free Sentinel Hub OAuth client from the Copernicus Data Space
-Ecosystem (dataspace.copernicus.eu → User Settings → OAuth clients). Provide
-`SH_CLIENT_ID` / `SH_CLIENT_SECRET` either in the page's sidebar or via
-Streamlit secrets (copy `.streamlit/secrets.toml.example` to
-`.streamlit/secrets.toml` locally; on Streamlit Community Cloud, paste them
-into the app's Settings → Secrets instead).
+**Home — Sugarcane RVI Early Warning.** Reads the committed
+`data/vectors/blocks.geojson` + `data/metadata/observations.csv`, fits a
+per-variety/crop-type healthy baseline, and scores current blocks against
+it. Farm boundaries here come from the repo: edit/replace
+`data/vectors/blocks.geojson` and rerun `python main.py`.
+
+**`pages/1_S1_Growth_Curves.py` — ad-hoc growth curves.** Upload any
+field-boundary GeoJSON and it fetches live Sentinel-1 VH/VV growth curves
+straight from the Sentinel Hub Process API — no SNAP preprocessing or local
+`data/raw/vv|vh` rasters required. Engine: `src/s1_growth_curves.py`.
+
+**`pages/2_Upload_Farm_Boundaries.py` — onboard farms from the browser.**
+The other way to supply farm boundaries: upload a GeoJSON directly in the
+app instead of committing it to the repo. Each feature needs `block_id`,
+`variety`, `crop_type`, `planting_date` properties. It handles two cases
+automatically:
+- **Already has history** (`block_id` found in `observations.csv`): matched
+  straight to its current row in `outputs/reports/block_report.csv` — no
+  new satellite calls. Since the uploaded geometry is what gets rendered,
+  this also doubles as a way to push a corrected/updated boundary shape
+  for an existing block onto the map.
+- **Brand new** (`block_id` never seen before): fetched live from Sentinel
+  Hub for the date range you pick, converted to RVI with the same formula
+  the rest of the pipeline uses, and scored against the *existing* healthy
+  baseline for that variety/crop-type. This is intentionally rule-based
+  only (no Isolation Forest — refitting that on a handful of new points
+  would be meaningless) and labeled "preliminary" until the farm
+  accumulates its own healthy-season history. The page offers a
+  ready-to-commit `observations.csv` download for exactly that next step.
+- If a new farm's variety/crop-type has no baseline at all yet, it's
+  flagged "No baseline available" rather than given a misleading score.
+
+Both Sentinel Hub-backed pages need a free OAuth client from the
+Copernicus Data Space Ecosystem (dataspace.copernicus.eu → User Settings →
+OAuth clients). Provide `SH_CLIENT_ID` / `SH_CLIENT_SECRET` either in a
+page's sidebar or via Streamlit secrets (copy
+`.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` locally; on
+Streamlit Community Cloud, paste them into the app's Settings → Secrets instead).
 
 ## Deploy to Streamlit Community Cloud
 
@@ -113,7 +140,13 @@ main file path to `dashboard.py` → **Deploy**. Add `SH_CLIENT_ID` /
 Sentinel-1 Growth Curves page. `requirements.txt` is what Cloud installs
 from; it intentionally omits `xarray`/`dask`/`tensorflow`/`jupyterlab` since
 those are only used in the notebook, not the deployed app, to keep builds
-fast — use `environment.yml` for local notebook work.
+fast — use `dev/environment.yml` for local notebook work. Keep
+`environment.yml`/`pyproject.toml` out of the repo root: Streamlit
+Community Cloud auto-detects *any* dependency manifest it finds there
+(conda takes priority over pip), so a root-level `environment.yml` will
+silently override `requirements.txt`/`packages.txt` and build the far
+slower, heavier conda environment instead — which is why it now lives in
+`dev/`.
 
 ## Database schema for scale
 
