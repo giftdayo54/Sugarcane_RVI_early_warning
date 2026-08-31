@@ -1,0 +1,38 @@
+project:
+  name: Sugarcane Anomaly Early Warning System
+  random_seed: 42
+paths:
+  vv_dir: data/raw/vv
+  vh_dir: data/raw/vh
+  blocks: data/vectors/blocks.geojson
+  observations: data/metadata/observations.csv
+  outputs: outputs
+  models: models
+raster:
+  input_units: db  # db or linear; SNAP output may be either
+  dst_crs: EPSG:32736  # set to local projected CRS
+  nodata: -9999.0
+  rvi_clip: [0.0, 4.0]
+  all_touched: false
+baseline:
+  healthy_column: healthy
+  grouping: [variety, crop_type]
+  age_bin_days: 14
+  min_samples: 5
+  smoothing_window: 3
+anomaly:
+  methods: [threshold, zscore, trend, isolation_forest]
+  weights:
+    threshold: 0.30
+    zscore: 0.30
+    trend: 0.15
+    isolation_forest: 0.25
+  watch_percent: -10
+  moderate_percent: -20
+  high_percent: -30
+  critical_percent: -40
+  persistence_dates: 2
+  pixel_z_threshold: -2.0
+alerts:
+  minimum_risk: High Risk
+  affected_area_percent: 10

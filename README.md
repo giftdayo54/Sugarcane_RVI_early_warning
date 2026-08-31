@@ -97,23 +97,30 @@ straight from the Sentinel Hub Process API — no SNAP preprocessing or local
 
 **`pages/2_Upload_Farm_Boundaries.py` — onboard farms from the browser.**
 The other way to supply farm boundaries: upload a GeoJSON directly in the
-app instead of committing it to the repo. Each feature needs `block_id`,
-`variety`, `crop_type`, `planting_date` properties. It handles two cases
-automatically:
-- **Already has history** (`block_id` found in `observations.csv`): matched
+app instead of committing it to the repo. Only a name/ID property is
+required (`block_id`/`id`/`name`/`field_id` — whichever is found first; IDs
+are auto-generated if none exist) — upload boundaries and see them on the
+map immediately, no other properties needed. It then handles two cases:
+- **Already has history** (ID found in `observations.csv`): matched
   straight to its current row in `outputs/reports/block_report.csv` — no
   new satellite calls. Since the uploaded geometry is what gets rendered,
   this also doubles as a way to push a corrected/updated boundary shape
   for an existing block onto the map.
-- **Brand new** (`block_id` never seen before): fetched live from Sentinel
-  Hub for the date range you pick, converted to RVI with the same formula
-  the rest of the pipeline uses, and scored against the *existing* healthy
-  baseline for that variety/crop-type. This is intentionally rule-based
+- **Brand new** (ID never seen before): needs variety, crop stage
+  (`crop_type` — this means ratoon vs plant cane, *not* crop species, since
+  that's what selects the right comparison baseline; it can't be
+  defaulted to "sugarcane"), and planting date before it can be scored.
+  If those aren't in the uploaded file, an editable table in the app
+  collects them (pre-filled from the existing baseline's values where
+  there's only one on record). Once filled in, it's fetched live from
+  Sentinel Hub for the date range you pick, converted to RVI with the
+  same formula the rest of the pipeline uses, and scored against the
+  *existing* healthy baseline for that variety/crop-stage — rule-based
   only (no Isolation Forest — refitting that on a handful of new points
-  would be meaningless) and labeled "preliminary" until the farm
-  accumulates its own healthy-season history. The page offers a
-  ready-to-commit `observations.csv` download for exactly that next step.
-- If a new farm's variety/crop-type has no baseline at all yet, it's
+  would be meaningless), labeled "preliminary" until the farm accumulates
+  its own healthy-season history. The page offers a ready-to-commit
+  `observations.csv` download for exactly that next step.
+- If a new farm's variety/crop-stage has no baseline at all yet, it's
   flagged "No baseline available" rather than given a misleading score.
 
 Both Sentinel Hub-backed pages need a free OAuth client from the
