@@ -93,7 +93,14 @@ it. Farm boundaries here come from the repo: edit/replace
 **`pages/1_S1_Growth_Curves.py` — ad-hoc growth curves.** Upload any
 field-boundary GeoJSON and it fetches live Sentinel-1 VH/VV growth curves
 straight from the Sentinel Hub Process API — no SNAP preprocessing or local
-`data/raw/vv|vh` rasters required. Engine: `src/s1_growth_curves.py`.
+`data/raw/vv|vh` rasters required. Engine: `src/s1_growth_curves.py`. Only a
+valid boundary is needed — a name/ID property is picked up automatically
+(or auto-generated if none exists), and the crop-type label used in chart
+titles/CSV output is purely cosmetic here (not used in the fetch), so it's
+editable *after* results come back rather than required up front. If the
+file has more than one field, a sidebar toggle lets you restrict the run to
+a single one, useful for a quick check on one farm without spending
+Sentinel Hub quota on the rest.
 
 **`pages/2_Upload_Farm_Boundaries.py` — onboard farms from the browser.**
 The other way to supply farm boundaries: upload a GeoJSON directly in the
