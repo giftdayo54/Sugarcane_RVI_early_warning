@@ -87,8 +87,20 @@ def authenticate_sentinel_hub(client_id: str, client_secret: str, base_url: str,
 # Field loading / validation
 # --------------------------------------------------------------------------
 
+ID_CANDIDATES = ["field_id", "block_id", "id", "ID", "Id", "name", "Name", "field_name", "FID", "fid"]
+DEFAULT_CROP_TYPE = "unspecified"
+
+
 def load_fields(geojson_path: str) -> gpd.GeoDataFrame:
-    """Load, validate, and clean field boundaries from a GeoJSON file."""
+    """Load, validate, and clean field boundaries from a GeoJSON file.
+
+    Only a valid geometry is strictly required. field_id is auto-detected
+    from common candidate property names (or auto-generated if none match),
+    and crop_type defaults to "unspecified" if absent — both are filled in
+    rather than rejected, since crop_type is purely descriptive here (it
+    doesn't gate the Sentinel-1 fetch itself, only downstream RVI baseline
+    lookups elsewhere in the app).
+    """
     path = Path(geojson_path)
     if not path.exists():
         raise FileNotFoundError(f"GeoJSON file not found: {geojson_path}")
@@ -97,11 +109,6 @@ def load_fields(geojson_path: str) -> gpd.GeoDataFrame:
         gdf = gpd.read_file(geojson_path)
     except Exception as exc:
         raise ValueError(f"failed to parse GeoJSON file '{geojson_path}': {exc}") from exc
-
-    required_columns = {"field_id", "crop_type"}
-    missing = required_columns - set(gdf.columns)
-    if missing:
-        raise ValueError(f"GeoJSON is missing required attribute(s): {sorted(missing)}")
 
     if gdf.crs is None:
         logger.warning("GeoJSON has no CRS defined; assuming EPSG:4326.")
@@ -122,14 +129,24 @@ def load_fields(geojson_path: str) -> gpd.GeoDataFrame:
 
     if gdf.empty:
         raise ValueError("no valid field geometries remain after cleaning.")
+    gdf = gdf.reset_index(drop=True)
 
-    if gdf["field_id"].isna().any() or gdf["crop_type"].isna().any():
-        gdf = gdf.dropna(subset=["field_id", "crop_type"])
+    id_col = next((c for c in ID_CANDIDATES if c in gdf.columns), None)
+    if id_col:
+        gdf["field_id"] = gdf[id_col].astype(str)
+        if gdf["field_id"].isna().any() or (gdf["field_id"] == "").any() or (gdf["field_id"] == "nan").any():
+            gdf["field_id"] = [
+                fid if fid not in (None, "", "nan") else f"field_{i + 1}" for i, fid in enumerate(gdf["field_id"])
+            ]
+    else:
+        gdf["field_id"] = [f"field_{i + 1}" for i in range(len(gdf))]
+        logger.warning("No name/ID property found in the GeoJSON — auto-generated field_id values were assigned.")
 
-    if gdf.empty:
-        raise ValueError("no fields with required attributes remain after cleaning.")
-
-    gdf["field_id"] = gdf["field_id"].astype(str)
+    if "crop_type" not in gdf.columns:
+        gdf["crop_type"] = DEFAULT_CROP_TYPE
+        logger.warning(f"No crop_type property found in the GeoJSON — defaulted to '{DEFAULT_CROP_TYPE}'.")
+    else:
+        gdf["crop_type"] = gdf["crop_type"].fillna(DEFAULT_CROP_TYPE).replace("", DEFAULT_CROP_TYPE)
 
     equal_area = gdf.to_crs("EPSG:6933")
     gdf["area_m2"] = equal_area.geometry.area
